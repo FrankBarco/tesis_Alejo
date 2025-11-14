@@ -6,6 +6,8 @@ import ezdxf
 import warnings
 warnings.filterwarnings("ignore")
 
+__version__ = "1.7.0"
+
 # ---------------------------------------------------------
 # CONFIGURACIÓN DEL RVE Y TAMAÑOS DE GRANO
 # ---------------------------------------------------------
