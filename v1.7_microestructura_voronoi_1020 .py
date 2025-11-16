@@ -6,17 +6,14 @@ import ezdxf
 import warnings
 warnings.filterwarnings("ignore")
 
-__version__ = "1.8.0"
-
 # ---------------------------------------------------------
-# CONFIGURACIÓN DEL RVE Y TAMAÑOS DE GRANOgit tag
-
+# CONFIGURACIÓN DEL RVE Y TAMAÑOS DE GRANO
 # ---------------------------------------------------------
 
 RVE_SIZE = 500  # micras
 
-grain_ferrite = 25   # micras (diámetro promedio)
-grain_martensite = 6 # micras (diámetro promedio)
+grain_ferrite = 30   # micras (diámetro promedio)
+grain_martensite = 8 # micras (diámetro promedio)
 
 fraction_ferrite = 0.75
 fraction_martensite = 0.25
@@ -35,7 +32,7 @@ print("FERRITA:", N_ferrite, "semillas")
 print("MARTENSITA:", N_martensite, "semillas")
 
 # ---------------------------------------------------------
-# FUNCIÓN PARA GENERAR SEMILLAS
+# FUNCIÓN PARA GENERAR SEMILLAS CON DISTANCIA MÍNIMA
 # ---------------------------------------------------------
 
 def generate_points(num_points, min_dist, size):
@@ -80,45 +77,51 @@ for i, region_index in enumerate(vor.point_region):
         regions.append((i, poly_clip))
 
 # ---------------------------------------------------------
-# EXPORTAR A DXF
+# EXPORTAR A DXF (MARTENSITA ROJA – FERRITA BLANCA)
 # ---------------------------------------------------------
 
 doc = ezdxf.new(dxfversion="R2010")
 msp = doc.modelspace()
 
+# Crear capas con color
+if "Ferrite" not in doc.layers:
+    doc.layers.add("Ferrite", color=7)   # blanco
+
+if "Martensite" not in doc.layers:
+    doc.layers.add("Martensite", color=1)  # rojo
+
 for i, poly in regions:
     coords = list(poly.exterior.coords)
 
-    # Elegir capa según fase
     if i < len(points_ferrite):
         layer = "Ferrite"
-        color = 7  # blanco
+        color = 7   # blanco
     else:
         layer = "Martensite"
-        color = 8  # gris
-
-    if layer not in doc.layers:
-        doc.layers.add(name=layer, color=color)
+        color = 1   # rojo visible
 
     msp.add_lwpolyline(
         coords,
         format="xy",
         close=True,
-        dxfattribs={"layer": layer}
+        dxfattribs={
+            "layer": layer,
+            "color": color  # diferencia visual garantizada
+        }
     )
 
-doc.saveas("RVE_DP.dxf")
-print("DXF generado: RVE_DP.dxf")
+doc.saveas("RVE_DP_COLORED.dxf")
+print("DXF generado: RVE_DP_COLORED.dxf")
 
 # ---------------------------------------------------------
-# PLOTEO PREVIEW
+# PLOTEO PREVIEW (PNG)
 # ---------------------------------------------------------
 
 fig, ax = plt.subplots(figsize=(7, 7))
 
 for i, poly in regions:
     phase = "Ferrita" if i < len(points_ferrite) else "Martensita"
-    color = "#F2F2F2" if phase == "Ferrita" else "#2F2F2F"
+    color = "#F2F2F2" if phase == "Ferrita" else "#B00000"  # rojo martensita
 
     x, y = poly.exterior.xy
     ax.fill(x, y, color=color, edgecolor='black', linewidth=0.25)
@@ -126,9 +129,9 @@ for i, poly in regions:
 ax.set_xlim(0, RVE_SIZE)
 ax.set_ylim(0, RVE_SIZE)
 ax.set_aspect('equal')
-ax.set_title("RVE Microestructura DP Steel – Exportado a DXF")
+ax.set_title("RVE – Acero 1020 DP\nFerrita 30µm | Martensita 8µm")
 plt.tight_layout()
-plt.savefig("RVE_DP.png", dpi=300)
+plt.savefig("RVE_DP_preview.png", dpi=300)
 plt.show()
 
-print("Preview generado: RVE_DP.png")
+print("Preview generado: RVE_DP_preview.png")
