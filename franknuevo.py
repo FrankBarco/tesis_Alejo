@@ -1,0 +1,1 @@
+Print(" andre no quiero que te ausentes en mi vida por rasones egoistas")
