@@ -11,16 +11,11 @@ import os
 #   CONFIGURACIÓN (micras → mm automáticamente)
 # ============================================
 
-MICRON_TO_MM = 0.001
 
-RVE_SIZE_um = 500.0      # micras
-grain_ferrite_um = 30.0
-grain_martensite_um = 8.0
+RVE_SIZE = 0.5     # mm
+grain_ferrite = 0.03
+grain_martensite= 0.008
 
-# convertir a mm (SpaceClaim trabaja en mm)
-RVE_SIZE = RVE_SIZE_um * MICRON_TO_MM
-grain_ferrite = grain_ferrite_um * MICRON_TO_MM
-grain_martensite = grain_martensite_um * MICRON_TO_MM
 
 fraction_ferrite = 0.75
 fraction_martensite = 0.25
