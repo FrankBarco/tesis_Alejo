@@ -232,6 +232,32 @@ def export_apdl(polygons, phases, filename=None):
         f.write("NUMMRG,KP\n")          # fusionar solo keypoints
         f.write("NUMMRG,LINE\n")        # luego líneas
         f.write("NUMCMP,ALL\n")
+# =====================================================
+# # DEFINICION DE ELEMENTO Y MALLA
+# =====================================================
+
+                # =====================================================
+        # DEFINICION DE ELEMENTO
+        # =====================================================
+
+        f.write("ET,1,PLANE182\n")
+        f.write("KEYOPT,1,3,3\n")   # Plane strain
+
+        # =====================================================
+        # CONTROL DE MALLADO (OPTIMIZADO VORONOI)
+        # =====================================================
+
+        f.write("SMRTSIZE,4\n")     # Smart sizing nivel medio-alto
+        f.write("MSHKEY,1\n")       # Mallado libre
+        f.write("MSHAPE,1,2D\n")    # Permitir triangulos y cuadrilateros
+        f.write("ESIZE,0.003\n")    # Tamaño refinado
+
+        f.write("ALLSEL,ALL\n")
+        f.write("TYPE,1\n")
+        f.write("AMESH,ALL\n\n")
+
+
+       
         f.write("FINISH\n")
 
     print(f"Archivo APDL generado: {filename}")
