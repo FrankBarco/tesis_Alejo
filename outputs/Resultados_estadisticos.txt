@@ -1,7 +1,0 @@
-=== RESULTADOS FINALES ===
-Ferrita promedio: 0.009695498159249093
-Martensita promedio: 0.008064202068549823
-Fraccion ferrita real: 0.0
-Fraccion martensita real: 0.9897221014854128
-N final ferrita: 0
-N final martensita: 4594
