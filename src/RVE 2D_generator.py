@@ -166,8 +166,7 @@ print("PNG generado: RVE_preview.png")
 # =====================================================
 # EXPORTAR SCRIPT APDL
 # =====================================================
-
-def export_apdl(polygons, filename=None):
+def export_apdl(polygons, phases, filename=None):
 
     if filename is None:
         filename = get_next_version_filename()
@@ -175,21 +174,59 @@ def export_apdl(polygons, filename=None):
     with open(filename, "w") as f:
         f.write("/PREP7\n")
         f.write("! --- RVE Voronoi generado desde Python ---\n\n")
-        
+
+        # =====================================================
+        # DEFINICION DE MATERIALES
+        # =====================================================
+
+        # -------- Ferrita (Material 1) --------
+        f.write("MP,EX,1,210000\n")     # Modulo elastico ejemplo (MPa)
+        f.write("MP,PRXY,1,0.3\n")
+        f.write("TB,GURSON,1\n")
+        f.write("TBDATA,1,1.5,1.0,2.25\n\n")
+
+        # -------- Martensita (Material 2) --------
+        f.write("MP,EX,2,230000\n")     # Mas rigida
+        f.write("MP,PRXY,2,0.28\n")
+        f.write("TB,GURSON,2\n")
+        f.write("TBDATA,1,1.8,1.0,3.24\n\n")
+
+        # =====================================================
+        # CREACION GEOMETRIA Y ASIGNACION DE MATERIAL
+        # =====================================================
+
         kp_id = 1
-        
-        for poly in polygons:
+
+        for poly, phase in zip(polygons, phases):
+
             coords = list(poly.exterior.coords)
             kp_list = []
-            
+
             for x, y in coords[:-1]:
                 f.write(f"K,{kp_id},{x},{y},0\n")
                 kp_list.append(kp_id)
                 kp_id += 1
-            
+
             kp_string = ",".join(str(k) for k in kp_list)
-            f.write(f"A,{kp_string}\n\n")
-        
+            f.write(f"A,{kp_string}\n")
+
+            # Obtener ultima area creada
+            f.write("*GET,LASTA,AREA,0,NUM,MAX\n")
+            f.write("ASEL,S,AREA,,LASTA\n")
+
+            # Asignar material segun fase
+            if phase == "ferrite":
+                f.write("AATT,1,1,1\n")
+            else:
+                f.write("AATT,2,1,1\n")
+
+            f.write("ALLSEL,ALL\n\n")
+
+
+
+# =====================================================
+#  # LIMPIEZA GEOMETRICA
+# =====================================================
         f.write("!Ajuste tolerancia geometrica\n")
         f.write("BTOL,1E-4\n")          # aumenta tolerancia geométrica
         f.write("NUMMRG,KP\n")          # fusionar solo keypoints
@@ -199,6 +236,6 @@ def export_apdl(polygons, filename=None):
 
     print(f"Archivo APDL generado: {filename}")
 
-export_apdl(regions)
+export_apdl(regions, region_phase)
 
 print("\nProceso completado correctamente.")
