@@ -190,7 +190,10 @@ def export_apdl(polygons, filename=None):
             kp_string = ",".join(str(k) for k in kp_list)
             f.write(f"A,{kp_string}\n\n")
         
-        f.write("NUMMRG,ALL\n")
+        f.write("!Ajuste tolerancia geometrica\n")
+        f.write("BTOL,1E-4\n")          # aumenta tolerancia geométrica
+        f.write("NUMMRG,KP\n")          # fusionar solo keypoints
+        f.write("NUMMRG,LINE\n")        # luego líneas
         f.write("NUMCMP,ALL\n")
         f.write("FINISH\n")
 
