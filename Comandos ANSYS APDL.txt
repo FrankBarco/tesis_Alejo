@@ -1,0 +1,19 @@
+Ver todo el modelo
+ALLSEL,ALL
+APLOT
+
+Mostrar número de material en cada área
+/PREP7
+/PNUM,MAT,1
+APLOT
+
+Seleccionar solo Ferrita
+/PREP7
+ASEL,S,MAT,,1
+APLOT
+
+Seleccionar solo Martensita
+
+/PREP7
+ASEL,S,MAT,,2
+APLOT

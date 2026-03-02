@@ -1,0 +1,13 @@
+/PREP7
+! --- RVE Voronoi generado desde Python ---
+
+MP,EX,1,210000
+MP,PRXY,1,0.3
+TB,GURSON,1
+TBDATA,1,1.5,1.0,2.25
+
+MP,EX,2,230000
+MP,PRXY,2,0.28
+TB,GURSON,2
+TBDATA,1,1.8,1.0,3.24
+
