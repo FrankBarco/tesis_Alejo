@@ -100,6 +100,50 @@ points_m = generar_puntos(N_martensite, min_dist_m)
 points = np.vstack([points_f, points_m])
 
 # ============================================================
+# LLOYD RELAXATION (Voronoi más realista)
+# ============================================================
+
+def lloyd_relaxation(points, iterations=3):
+
+    for _ in range(iterations):
+
+        offsets = [-RVE_SIZE, 0, RVE_SIZE]
+        ext_points = []
+
+        for ox in offsets:
+            for oy in offsets:
+                for p in points:
+                    ext_points.append(p + np.array([ox, oy]))
+
+        ext_points = np.array(ext_points)
+
+        vor = Voronoi(ext_points)
+
+        new_points = []
+
+        for i in range(len(points)):
+
+            region = vor.regions[vor.point_region[i + 4*len(points)]]
+
+            if -1 in region or len(region) == 0:
+                new_points.append(points[i])
+                continue
+
+            polygon = Polygon([vor.vertices[v] for v in region])
+            polygon = polygon.intersection(box(0,0,RVE_SIZE,RVE_SIZE))
+
+            if polygon.area > 0:
+                new_points.append(np.array(polygon.centroid.coords[0]))
+            else:
+                new_points.append(points[i])
+
+        points = np.array(new_points)
+
+    return points
+
+
+points = lloyd_relaxation(points, iterations=4)
+# ============================================================
 # VORONOI CON MIRRORING
 # ============================================================
 
@@ -117,13 +161,27 @@ vor = Voronoi(ext_points)
 domain = box(0, 0, RVE_SIZE, RVE_SIZE)
 
 def fix_polygon(p):
+
     if p.is_empty:
         return None
+
+    # corregir geometría
     p = p.buffer(0)
+
+    # eliminar agujeros
     if hasattr(p, "interiors") and len(p.interiors) > 0:
         p = Polygon(p.exterior)
+
+    # eliminar áreas muy pequeñas
     if p.area < 1e-12:
         return None
+
+    # ------------------------------------------------
+    # SUAVIZADO DE BORDES (microestructura más realista)
+    # ------------------------------------------------
+    smooth = RVE_SIZE * 0.002
+    p = p.buffer(smooth).buffer(-smooth)
+
     return p
 
 # ============================================================
@@ -150,8 +208,12 @@ for local_idx, global_idx in enumerate(range(start, end)):
         regions.append((local_idx, poly))
 
 # ============================================================
-# FILTRAR GRANOS DEMASIADO PEQUEÑOS (mejora mallado ANSYS)
+# FILTRAR GRANOS PROBLEMÁTICOS (mejora mallado en ANSYS)
 # ============================================================
+
+# ------------------------------------------------------------
+# 1) FILTRO DE ÁREA MÍNIMA (elimina granos muy pequeños)
+# ------------------------------------------------------------
 
 grain_areas = np.array([poly.area for (_, poly) in regions])
 
@@ -159,13 +221,35 @@ min_area = 0.05 * np.mean(grain_areas)
 
 regions = [(i, poly) for (i, poly) in regions if poly.area > min_area]
 
-print("Granos después del filtro:", len(regions))    
+print("Granos después del filtro de área:", len(regions))
+
+
+# ------------------------------------------------------------
+# 2) FILTRO DE FORMA (elimina granos muy alargados)
+# ------------------------------------------------------------
+
+def aspect_ratio(poly):
+    minx, miny, maxx, maxy = poly.bounds
+    w = maxx - minx
+    h = maxy - miny
+    return max(w, h) / (min(w, h) + 1e-12)
+
+regions = [(i, poly) for (i, poly) in regions if aspect_ratio(poly) < 8]
+
+print("Granos después del filtro de forma:", len(regions))
+
+
+# ------------------------------------------------------------
+# 3) SEPARAR FASES
+# ------------------------------------------------------------
 
 ferrite_polys = [p for (i, p) in regions if i < len(points_f)]
 martensite_polys = [p for (i, p) in regions if i >= len(points_f)]
 
-print("Regiones finales → Ferrita:", len(ferrite_polys),
-      "Martensita:", len(martensite_polys))
+print(
+    "Regiones finales → Ferrita:", len(ferrite_polys),
+    "Martensita:", len(martensite_polys)
+)
 
 # ============================================================
 # PREVISUALIZACIÓN PNG
