@@ -55,11 +55,11 @@ from OCC.Core.STEPControl import STEPControl_Writer, STEPControl_AsIs
 # CONFIGURACIÓN DEL RVE
 # ============================================================
 
-RVE_SIZE = 0.5        # mm (500 µm)
+RVE_SIZE = 0.3       # mm (500 µm)
 THICKNESS = 0.1       # mm (espesor 3D)
 
-grain_ferrite = 0.03
-grain_martensite = 0.008
+grain_ferrite = 0.02
+grain_martensite = 0.01
 
 fraction_ferrite = 0.75
 fraction_martensite = 0.25
@@ -148,6 +148,18 @@ for local_idx, global_idx in enumerate(range(start, end)):
 
     if poly:
         regions.append((local_idx, poly))
+
+# ============================================================
+# FILTRAR GRANOS DEMASIADO PEQUEÑOS (mejora mallado ANSYS)
+# ============================================================
+
+grain_areas = np.array([poly.area for (_, poly) in regions])
+
+min_area = 0.05 * np.mean(grain_areas)
+
+regions = [(i, poly) for (i, poly) in regions if poly.area > min_area]
+
+print("Granos después del filtro:", len(regions))    
 
 ferrite_polys = [p for (i, p) in regions if i < len(points_f)]
 martensite_polys = [p for (i, p) in regions if i >= len(points_f)]
