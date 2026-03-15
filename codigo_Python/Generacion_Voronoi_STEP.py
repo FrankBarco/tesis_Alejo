@@ -189,6 +189,7 @@ def fix_polygon(poly):
         return None
 
     poly = poly.buffer(0)
+    poly = poly.simplify(1e-5)
 
     if hasattr(poly, "interiors") and len(poly.interiors) > 0:
         poly = Polygon(poly.exterior)
@@ -199,7 +200,7 @@ def fix_polygon(poly):
     smooth = RVE_SIZE * 0.001
     poly = poly.buffer(smooth).buffer(-smooth)
 
-    poly = poly.simplify(RVE_SIZE * 0.0003, preserve_topology=True)
+    poly = poly.simplify(RVE_SIZE * 0.0006, preserve_topology=True)
 
     return poly
 
@@ -208,7 +209,7 @@ def fix_polygon(poly):
 # SNAP DE VÉRTICES
 # ============================================================
 
-def snap_vertices(poly, tol=1e-4):
+def snap_vertices(poly, tol=3e-4):
 
     coords = list(poly.exterior.coords)
 
@@ -261,7 +262,7 @@ for local_idx, global_idx in enumerate(range(start,end)):
 
 grain_areas = np.array([poly.area for (_, poly) in regions])
 
-min_area = 0.15 * np.mean(grain_areas)
+min_area = 0.20 * np.mean(grain_areas)
 
 regions = [(i,p) for (i,p) in regions if p.area > min_area]
 
