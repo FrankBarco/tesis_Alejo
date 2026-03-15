@@ -8,6 +8,7 @@ import re
 BASE_DIR = r"D:\37-Alejo U\Generar_Voroni 3D\Step"
 
 def get_next_version_folder(base_dir):
+
     os.makedirs(base_dir, exist_ok=True)
 
     existing = [
@@ -26,23 +27,21 @@ def get_next_version_folder(base_dir):
 
     return new_folder
 
+
 VERSION_FOLDER = get_next_version_folder(BASE_DIR)
 
-print(f"✔ Carpeta creada: {VERSION_FOLDER}")
+print("✔ Carpeta creada:", VERSION_FOLDER)
 
 
 # ============================================================
-#  RVE DP STEEL – Voronoi → STEP (CAD sólido) + PNG preview
-#  Unidades: mm
+# LIBRERÍAS
 # ============================================================
 
 import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import Polygon, box
-import shapely.ops
 import matplotlib.pyplot as plt
 
-# -------- OpenCascade --------
 from OCC.Core.gp import gp_Pnt, gp_Vec
 from OCC.Core.BRepBuilderAPI import (
     BRepBuilderAPI_MakePolygon,
@@ -51,12 +50,13 @@ from OCC.Core.BRepBuilderAPI import (
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakePrism
 from OCC.Core.STEPControl import STEPControl_Writer, STEPControl_AsIs
 
+
 # ============================================================
 # CONFIGURACIÓN DEL RVE
 # ============================================================
 
-RVE_SIZE = 0.3       # mm (500 µm)
-THICKNESS = 0.1       # mm (espesor 3D)
+RVE_SIZE = 0.3
+THICKNESS = 0.1
 
 grain_ferrite = 0.02
 grain_martensite = 0.01
@@ -64,10 +64,16 @@ grain_martensite = 0.01
 fraction_ferrite = 0.75
 fraction_martensite = 0.25
 
+
+# ============================================================
+# CALCULO DE GRANOS
+# ============================================================
+
 min_dist_f = grain_ferrite / 2.0
 min_dist_m = grain_martensite / 2.0
 
 area_RVE = RVE_SIZE ** 2
+
 area_f = np.pi * min_dist_f**2
 area_m = np.pi * min_dist_m**2
 
@@ -76,34 +82,42 @@ N_martensite = int((area_RVE * fraction_martensite) / area_m)
 
 print("Ferrita:", N_ferrite, "Martensita:", N_martensite)
 
+
 # ============================================================
-# GENERACIÓN DE PUNTOS (Poisson-disc)
+# GENERACIÓN DE PUNTOS (Poisson Disc)
 # ============================================================
 
 rng = np.random.default_rng(42)
 
 def generar_puntos(n, min_dist):
+
     pts = []
     intentos = 0
     max_intentos = n * 300
 
     while len(pts) < n and intentos < max_intentos:
+
         p = rng.random(2) * RVE_SIZE
+
         if all(np.linalg.norm(p - np.array(q)) >= min_dist for q in pts):
             pts.append(p)
+
         intentos += 1
 
     return np.array(pts)
 
+
 points_f = generar_puntos(N_ferrite, min_dist_f)
 points_m = generar_puntos(N_martensite, min_dist_m)
+
 points = np.vstack([points_f, points_m])
 
+
 # ============================================================
-# LLOYD RELAXATION (Voronoi más realista)
+# LLOYD RELAXATION
 # ============================================================
 
-def lloyd_relaxation(points, iterations=3):
+def lloyd_relaxation(points, iterations=4):
 
     for _ in range(iterations):
 
@@ -142,12 +156,15 @@ def lloyd_relaxation(points, iterations=3):
     return points
 
 
-points = lloyd_relaxation(points, iterations=4)
+points = lloyd_relaxation(points)
+
+
 # ============================================================
-# VORONOI CON MIRRORING
+# VORONOI
 # ============================================================
 
-offsets = [-RVE_SIZE, 0.0, RVE_SIZE]
+offsets = [-RVE_SIZE, 0, RVE_SIZE]
+
 ext_points = []
 
 for ox in offsets:
@@ -156,162 +173,229 @@ for ox in offsets:
             ext_points.append(p + np.array([ox, oy]))
 
 ext_points = np.array(ext_points)
+
 vor = Voronoi(ext_points)
 
-domain = box(0, 0, RVE_SIZE, RVE_SIZE)
+domain = box(0,0,RVE_SIZE,RVE_SIZE)
 
-def fix_polygon(p):
-
-    if p.is_empty:
-        return None
-
-    # corregir geometría
-    p = p.buffer(0)
-
-    # eliminar agujeros
-    if hasattr(p, "interiors") and len(p.interiors) > 0:
-        p = Polygon(p.exterior)
-
-    # eliminar áreas muy pequeñas
-    if p.area < 1e-12:
-        return None
-
-    # ------------------------------------------------
-    # SUAVIZADO DE BORDES (microestructura más realista)
-    # ------------------------------------------------
-    smooth = RVE_SIZE * 0.002
-    p = p.buffer(smooth).buffer(-smooth)
-
-    return p
 
 # ============================================================
-# EXTRAER CELDAS CENTRALES
+# LIMPIEZA GEOMÉTRICA
+# ============================================================
+
+def fix_polygon(poly):
+
+    if poly.is_empty:
+        return None
+
+    poly = poly.buffer(0)
+
+    if hasattr(poly, "interiors") and len(poly.interiors) > 0:
+        poly = Polygon(poly.exterior)
+
+    if poly.area < 1e-10:
+        return None
+
+    smooth = RVE_SIZE * 0.001
+    poly = poly.buffer(smooth).buffer(-smooth)
+
+    poly = poly.simplify(RVE_SIZE * 0.0003, preserve_topology=True)
+
+    return poly
+
+
+# ============================================================
+# SNAP DE VÉRTICES
+# ============================================================
+
+def snap_vertices(poly, tol=1e-4):
+
+    coords = list(poly.exterior.coords)
+
+    snapped = []
+
+    for x, y in coords:
+
+        x = round(x / tol) * tol
+        y = round(y / tol) * tol
+
+        snapped.append((x,y))
+
+    return Polygon(snapped)
+
+
+# ============================================================
+# EXTRAER CELDAS
 # ============================================================
 
 regions = []
-n_total = len(points)
-start = 4 * n_total
-end = 5 * n_total
 
-for local_idx, global_idx in enumerate(range(start, end)):
+n_total = len(points)
+
+start = 4*n_total
+end = 5*n_total
+
+for local_idx, global_idx in enumerate(range(start,end)):
+
     region_id = vor.point_region[global_idx]
+
     region = vor.regions[region_id]
 
     if not region or -1 in region:
         continue
 
     poly = Polygon([vor.vertices[v] for v in region])
+
     poly = poly.intersection(domain)
+
     poly = fix_polygon(poly)
 
     if poly:
+        poly = snap_vertices(poly)
         regions.append((local_idx, poly))
 
-# ============================================================
-# FILTRAR GRANOS PROBLEMÁTICOS (mejora mallado en ANSYS)
-# ============================================================
 
-# ------------------------------------------------------------
-# 1) FILTRO DE ÁREA MÍNIMA (elimina granos muy pequeños)
-# ------------------------------------------------------------
+# ============================================================
+# FILTROS DE MALLADO
+# ============================================================
 
 grain_areas = np.array([poly.area for (_, poly) in regions])
 
-min_area = 0.05 * np.mean(grain_areas)
+min_area = 0.15 * np.mean(grain_areas)
 
-regions = [(i, poly) for (i, poly) in regions if poly.area > min_area]
+regions = [(i,p) for (i,p) in regions if p.area > min_area]
 
-print("Granos después del filtro de área:", len(regions))
+print("Granos después filtro área:", len(regions))
 
-
-# ------------------------------------------------------------
-# 2) FILTRO DE FORMA (elimina granos muy alargados)
-# ------------------------------------------------------------
 
 def aspect_ratio(poly):
-    minx, miny, maxx, maxy = poly.bounds
-    w = maxx - minx
-    h = maxy - miny
-    return max(w, h) / (min(w, h) + 1e-12)
 
-regions = [(i, poly) for (i, poly) in regions if aspect_ratio(poly) < 8]
+    minx,miny,maxx,maxy = poly.bounds
 
-print("Granos después del filtro de forma:", len(regions))
+    w = maxx-minx
+    h = maxy-miny
+
+    return max(w,h)/(min(w,h)+1e-12)
 
 
-# ------------------------------------------------------------
-# 3) SEPARAR FASES
-# ------------------------------------------------------------
+regions = [(i,p) for (i,p) in regions if aspect_ratio(p) < 8]
 
-ferrite_polys = [p for (i, p) in regions if i < len(points_f)]
-martensite_polys = [p for (i, p) in regions if i >= len(points_f)]
+print("Granos después filtro forma:", len(regions))
+
+
+# ============================================================
+# SEPARAR FASES
+# ============================================================
+
+ferrite_polys = [p for (i,p) in regions if i < len(points_f)]
+martensite_polys = [p for (i,p) in regions if i >= len(points_f)]
 
 print(
     "Regiones finales → Ferrita:", len(ferrite_polys),
     "Martensita:", len(martensite_polys)
 )
 
+
 # ============================================================
-# PREVISUALIZACIÓN PNG
+# PREVIEW
 # ============================================================
 
-plt.figure(figsize=(7, 7))
+plt.figure(figsize=(7,7))
 
 for p in ferrite_polys:
-    x, y = p.exterior.xy
-    plt.fill(x, y, color="#4C72B0", linewidth=0)
+
+    x,y = p.exterior.xy
+    plt.fill(x,y,color="#4C72B0",linewidth=0)
 
 for p in martensite_polys:
-    x, y = p.exterior.xy
-    plt.fill(x, y, color="#DDDDDD", linewidth=0)
+
+    x,y = p.exterior.xy
+    plt.fill(x,y,color="#DDDDDD",linewidth=0)
 
 plt.gca().set_aspect("equal")
 plt.axis("off")
-preview_path = os.path.join(VERSION_FOLDER, "RVE_DP_voronoi_preview.png")
-plt.savefig(preview_path, dpi=300, bbox_inches="tight")
+
+preview_path = os.path.join(VERSION_FOLDER,"preview.png")
+
+plt.savefig(preview_path,dpi=300,bbox_inches="tight")
+
 plt.close()
 
-print("✔ PNG generado: RVE_DP_voronoi_preview.png")
+print("✔ Preview generado")
+
 
 # ============================================================
-# SHAPELY → SOLID CAD (STEP)
+# SHAPELY → SOLID
 # ============================================================
 
 def shapely_to_solid(poly, thickness):
+
     coords = list(poly.exterior.coords)
 
     wire = BRepBuilderAPI_MakePolygon()
-    for x, y in coords:
-        wire.Add(gp_Pnt(float(x), float(y), 0.0))
+
+    for x,y in coords:
+        wire.Add(gp_Pnt(float(x),float(y),0))
+
     wire.Close()
 
     face = BRepBuilderAPI_MakeFace(wire.Wire())
-    vec = gp_Vec(0, 0, thickness)
 
-    solid = BRepPrimAPI_MakePrism(face.Face(), vec).Shape()
+    vec = gp_Vec(0,0,thickness)
+
+    solid = BRepPrimAPI_MakePrism(face.Face(),vec).Shape()
+
     return solid
 
-def export_step(polys, filename):
+
+# ============================================================
+# EXPORT STEP
+# ============================================================
+
+def export_rve_step(ferrite_polys, martensite_polys, filename):
+
     writer = STEPControl_Writer()
-    for p in polys:
+
+    print("Exportando ferrita...")
+
+    for p in ferrite_polys:
+
         try:
-            s = shapely_to_solid(p, THICKNESS)
-            writer.Transfer(s, STEPControl_AsIs)
+
+            s = shapely_to_solid(p,THICKNESS)
+
+            writer.Transfer(s,STEPControl_AsIs)
+
         except:
             pass
+
+    print("Exportando martensita...")
+
+    for p in martensite_polys:
+
+        try:
+
+            s = shapely_to_solid(p,THICKNESS)
+
+            writer.Transfer(s,STEPControl_AsIs)
+
+        except:
+            pass
+
     writer.Write(filename)
 
+
 # ============================================================
-# EXPORTAR STEP
+# EXPORT FINAL
 # ============================================================
 
-ferrite_path = os.path.join(VERSION_FOLDER, "RVE_ferrite_mm.stp")
-martensite_path = os.path.join(VERSION_FOLDER, "RVE_martensite_mm.stp")
+rve_path = os.path.join(VERSION_FOLDER,"RVE_total_mm.stp")
 
-export_step(ferrite_polys, ferrite_path)
-export_step(martensite_polys, martensite_path)
+export_rve_step(
+    ferrite_polys,
+    martensite_polys,
+    rve_path
+)
 
-print("✔ STEP exportados:")
-print(" - RVE_ferrite_mm.stp")
-print(" - RVE_martensite_mm.stp")
-print("\n✔ RVE DP 3D CAD listo para ANSYS / GTN")
+print("✔ STEP exportado:")
+print(" - RVE_total_mm.stp")
